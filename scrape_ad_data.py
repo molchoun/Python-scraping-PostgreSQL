@@ -11,7 +11,7 @@ def scrape_apt_ad_page():
 
     data_list = []
 
-    for url in urls[:1000]:
+    for url in urls:
         try:
             req = Request(url, headers={'User-Agent': 'Mozilla/5.0'})
             webpage = urlopen(req).read().decode('utf-8')
