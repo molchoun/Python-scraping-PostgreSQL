@@ -1,4 +1,4 @@
-## Welcome to GitHub Pages
+## Web scraping project
 
 You can use the [editor on GitHub](https://github.com/molchoun/web-scraping/edit/main/README.md) to maintain and preview the content for your website in Markdown files.
 
