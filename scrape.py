@@ -1,5 +1,7 @@
 import re
+import urllib
 from urllib.request import Request, urlopen
+from urllib.error import HTTPError, URLError
 from bs4 import BeautifulSoup as soup
 import time
 import pandas as pd
@@ -17,19 +19,31 @@ class AdLinkScraper:
         pass
 
     @staticmethod
-    def page_soup(url):
-        req = Request(url, headers={'User-Agent': 'Mozilla/5.0'})
-        webpage = urlopen(req).read().decode('utf-8')
-        pg_soup = soup(webpage, "html.parser")
-        return pg_soup
+    def page_soup(url: str):
+        """Parameter `url`: web address of page to parse.
+        In case of failure prints error, otherwise returns `BeautifulSoup` object: parsed html document (str),
+        """
+        try:
+            req = Request('https://www.list.ama/', headers={'User-Agent': 'Mozilla/5.0'})
+            webpage = urlopen(req).read().decode('utf-8')
+            pg_soup = soup(webpage, "html.parser")
+        except urllib.error.HTTPError as errh:
+            print(f'Error during fetching of website:')
+            return errh
+        except urllib.error.URLError as erru:
+            print(f'Error during fetching of website:')
+            return erru
+        else:
+            return pg_soup
 
-    def get_categories_queries(self):
-        url = 'https://www.list.am/en/category/54'
+    def get_categories_paths(self):
+        """Returns all categories' names and paths in a dictionary.
+        e.g. {'Apartments for sale': '/category/60', 'Houses for rent: '/category/63', ...} """
+
+        url = 'https://www.list.am/en/category/54'  # arbitrary category url to fetch data
         pg_soup = self.page_soup(url)
         section_cat = pg_soup.select('div.s')
         categories_dict = dict()
-        # Fill dictionary with categories names and links to respective pages:
-        # e.g 'Apartments for sale': '/category/60'
         for cat in section_cat[2].select('a'):
             categories_dict[cat.text + ' for sale'] = cat['href']
         for cat in section_cat[3].select('a'):
@@ -39,7 +53,8 @@ class AdLinkScraper:
 
     def get_regions(self):
         """
-        Returns dictionary: key being location name and value - query string
+        Returns all region names and query string in a dictionary.
+        e.g. {'Yerevan': '?n=1', 'Armavir': '?n=23', ...}
         """
         url = 'https://www.list.am/en/category/'
         pg_soup = self.page_soup(url)
