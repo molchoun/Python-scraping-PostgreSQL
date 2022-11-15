@@ -3,11 +3,9 @@ from urllib.request import Request, urlopen
 from bs4 import BeautifulSoup as soup
 import time
 import pandas as pd
-from typing import List
 from pathlib import Path
 from datetime import datetime
-
-from numpy import random
+import random
 
 
 def page_soup(url):
@@ -40,10 +38,10 @@ def get_location():
     pg_soup = page_soup(url)
 
     # select all `divs` that contain region names
-    data_searchname = pg_soup.find_all('div', {'class': 'i', 'data-name': re.compile('^[A-z]')}) # data-name - to
+    data_searchname = pg_soup.find_all('div', {'class': 'i', 'data-name': re.compile('^[A-z]')})  # data-name - to
     # select only regions, without cities
     loc_dict = dict()
-    for data in data_searchname[1:len(data_searchname)-1]: # slicing to exclude option 'All'
+    for data in data_searchname[1:len(data_searchname) - 1]:  # slicing to exclude option 'All'
         if data['data-name'] not in loc_dict:
             loc_dict[data['data-name']] = '?n=' + data['data-value']
     return loc_dict
@@ -60,7 +58,7 @@ def get_ad_links(url: str, path: str, key_cat: str, key_loc: str):
     a_tags = []
     p = 1
     print(f'{key_cat} category for {key_loc} region')
-    while True: # loop through each page of pagination
+    while True:  # loop through each page of pagination
         pg_soup = page_soup(url)
         # append list with `a` tags containing link to ad, e.g /en/item/16954298
         a_tags.extend(pg_soup.select('div.gl a'))
@@ -78,7 +76,7 @@ def get_ad_links(url: str, path: str, key_cat: str, key_loc: str):
     for a in a_tags:
         full_url = 'https://list.am' + a['href']
         if full_url not in links.values():
-            links.update({len(links):full_url})
+            links.update({len(links): full_url})
             dt_string.update({len(links): datetime.now().strftime("%b-%d-%Y_%H-%M")})
     print('Done')
     return links.values(), dt_string.values()
@@ -98,21 +96,9 @@ if __name__ == '__main__':
                 path_to_folder.mkdir(parents=True, exist_ok=True)
             ad_links = get_ad_links(url, path_to_file, key_cat, key_loc)
             dict_apt = {
-                        key_cat: ad_links[0],
-                       'Datetime': ad_links[1]
-                        }
+                key_cat: ad_links[0],
+                'Datetime': ad_links[1]
+            }
             df_links_apt = pd.DataFrame(dict_apt)
             # df_links_apt = pd.DataFrame({key: pd.Series(value) for key, value in dict_apt.items() })
             df_links_apt.to_csv(path_to_file, index=False)
-
-
-
-# url = URL_HOME + get_category_url()['Apartments for sale'] + get_location()['Yerevan']
-# dict_apt = {'Apartments': get_ad_links(url)}
-# df_links_apt = pd.DataFrame(dict_apt)
-# df_links_apt.to_csv('data/apartments-evn-links.csv')
-
-# dict_houses = {'Houses': get_ad_links('https://www.list.am/category/62/', 88)}
-# df_links_houses = pd.DataFrame(dict_houses)
-# df_links_houses.to_csv('data/houses-evn-links.csv')
-
