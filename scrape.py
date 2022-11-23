@@ -40,7 +40,7 @@ class AdLinkScraper:
         """Returns all categories' names and paths in a dictionary.
         e.g. {'Apartments for sale': '/category/60', 'Houses for rent: '/category/63', ...} """
 
-        url = 'https://www.list.am/en/category/54'  # arbitrary category url to fetch data
+        url = 'https://www.list.am/en/category/54'  # arbitrary category url to fetch all categories paths
         pg_soup = self.page_soup(url)
         section_cat = pg_soup.select('div.s')
         categories_dict = dict()
@@ -56,12 +56,12 @@ class AdLinkScraper:
         Returns all region names and query string in a dictionary.
         e.g. {'Yerevan': '?n=1', 'Armavir': '?n=23', ...}
         """
-        url = 'https://www.list.am/en/category/'
+        url = 'https://www.list.am/en/category/' # url to fetch all region paths
         pg_soup = self.page_soup(url)
 
         # select all `divs` that contain region names
         data_searchname = pg_soup.find_all('div', {'class': 'i', 'data-name': re.compile('^[A-z]')})  # data-name - to
-        # select only regions, without cities
+        # filter out city names
         loc_dict = dict()
         for data in data_searchname[1:len(data_searchname) - 1]:  # slicing to exclude option 'All'
             if data['data-name'] not in loc_dict:
@@ -81,7 +81,7 @@ class AdLinkScraper:
         print(f'{key_cat} category for {key_loc} region')
         while True:  # loop through each page of pagination
             pg_soup = self.page_soup(url)
-            # append list with `a` tags containing link to ad, e.g /en/item/16954298
+            # append list with `a` tags containing path to ad, e.g /en/item/16954298
             a_tags.extend(pg_soup.select('div.gl a'))
             # locate the `Next` button
             next_page_element = pg_soup.find('a', text='Next >')
