@@ -7,12 +7,26 @@ from bs4 import BeautifulSoup as soup
 import os
 
 
-def scrape_apt_ad_page(directory, filename):
-    files = Path(directory).glob('*')
+def get_filenames(data_dir='data'):
+    is_dir = os.path.isdir(data_dir)
+    if not is_dir:
+        print(f'\"{os.getcwd()}/{data_dir}\" directory does not exist, please specify correct data directory.')
+        exit()
+    filenames = []
+    data_f = []
+    for root, dirs, files in os.walk(data_dir):
+        for name in files:
+            f = os.path.join(root, name)
+            if f.endswith('data.csv'):
+                continue
+            filenames.append(f)
 
+    return filenames
+
+
+def scrape_apt_ad_page():
+    files = get_filenames()
     for file in files:
-        f = file
-        file = os.path.join(file, filename+'.csv')
         df = pd.read_csv(file)
         urls = df['Apartments for sale']
         df_ad_data = pd.DataFrame()
@@ -56,15 +70,11 @@ def scrape_apt_ad_page(directory, filename):
             counter -= 1
             print(f'{(1 - counter / len(urls)) * 100}% is done')
 
-    df_ad_data['Links'] = urls
-    df_ad_data.to_csv('data/Apartments for sale/Artsakh/Apartments for sale_data1.csv', index=False)
+            df_ad_data['Links'] = urls
+            df_ad_data.to_csv('data/Apartments for sale/Artsakh/Apartments for sale_data1.csv', index=False)
     print(f'done!')
     # return data_list, list(data_dict.keys())
 
 
 if __name__ == '__main__':
-    directory = 'data'
-    filename = 'Apartments for sale'
-    # directory = 'data\Apartments for rent'
-    # filename = 'Apartments for rent'
-    scrape_apt_ad_page(directory, filename)
+    scrape_apt_ad_page()
