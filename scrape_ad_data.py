@@ -13,7 +13,6 @@ def get_filenames(data_dir='data'):
         print(f'\"{os.getcwd()}/{data_dir}\" directory does not exist, please specify correct data directory.')
         exit()
     filenames = []
-    data_f = []
     for root, dirs, files in os.walk(data_dir):
         for name in files:
             f = os.path.join(root, name)
@@ -27,12 +26,20 @@ def get_filenames(data_dir='data'):
 def scrape_apt_ad_page():
     files = get_filenames()
     for file in files:
+        path_list = file.split('/')
         df = pd.read_csv(file)
-        urls = df['Apartments for sale']
-        df_ad_data = pd.DataFrame()
+        try:
+            df_ad_data = pd.read_csv(f'{file}_data.csv')
+            urls_data = df_ad_data['Links']
+        except:
+            df_ad_data = pd.DataFrame()
+            urls_data = pd.Series()
+        urls = df[path_list[1]]
         counter = len(urls)
 
         for url_idx in range(len(urls)):
+            if urls[url_idx] in urls_data.tolist():
+                continue
             try:
                 req = Request(urls[url_idx], headers={'User-Agent': 'Mozilla/5.0'})
                 webpage = urlopen(req).read().decode('utf-8')
@@ -71,7 +78,7 @@ def scrape_apt_ad_page():
             print(f'{(1 - counter / len(urls)) * 100}% is done')
 
             df_ad_data['Links'] = urls
-            df_ad_data.to_csv('data/Apartments for sale/Artsakh/Apartments for sale_data1.csv', index=False)
+            df_ad_data.to_csv(f'{file}_data.csv', index=False)
     print(f'done!')
     # return data_list, list(data_dict.keys())
 
