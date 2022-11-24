@@ -94,4 +94,5 @@ def scrape_apt_ad_page():
 
 
 if __name__ == '__main__':
+
     scrape_apt_ad_page()
