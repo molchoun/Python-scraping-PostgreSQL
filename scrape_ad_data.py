@@ -31,8 +31,10 @@ def scrape_apt_ad_page():
     for file in files:
         path_list = file.split('/')
         df = pd.read_csv(file)
+        if len(df) == 0 or path_list[1] not in df.columns:
+            continue
         try:
-            df_ad_data = pd.read_csv(f'{file}_data.csv')
+            df_ad_data = pd.read_csv(f'{file[:-4]}_data.csv')
             urls_data = df_ad_data['Links']
         except:
             df_ad_data = pd.DataFrame()
@@ -41,6 +43,7 @@ def scrape_apt_ad_page():
         counter = len(urls)
         urls_temp = []
         for url_idx in range(len(urls)):
+            urls[url_idx] = str(urls[url_idx])
             if urls[url_idx] in urls_data.tolist():
                 continue
             elif urls[url_idx].endswith('price') or urls[url_idx].endswith('removed'):
@@ -52,7 +55,7 @@ def scrape_apt_ad_page():
                 if page_soup.find('span', class_='price') is None:  # delete url and skip if ad has no price provided
                     urls[url_idx] += ' no price'
                     continue
-            except urllib.error.HTTPError or ValueError:
+            except:
                 urls[url_idx] += ' ad removed'
                 continue
 
@@ -87,8 +90,8 @@ def scrape_apt_ad_page():
         df.loc[:, path_list[1]] = urls
         df.to_csv(file, index=False)
         df_ad_data.loc[len(df_ad_data)-len(urls_temp):, 'Links'] = urls_temp
-        df_ad_data.to_csv(f'{file}_data.csv', index=False)
-        time.sleep(random.randint(2, 4))
+        df_ad_data.to_csv(f'{file[:-4]}_data.csv', index=False)
+        # time.sleep(random.randint(2, 4))
     print(f'done!')
     # return data_list, list(data_dict.keys())
 
