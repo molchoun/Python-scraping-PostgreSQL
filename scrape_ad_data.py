@@ -1,6 +1,3 @@
-import urllib
-from pathlib import Path
-from urllib.error import HTTPError
 from urllib.request import Request, urlopen
 import pandas as pd
 from bs4 import BeautifulSoup as soup
@@ -46,7 +43,7 @@ def scrape_apt_ad_page():
             urls[url_idx] = str(urls[url_idx])
             if urls[url_idx] in urls_data.tolist():
                 continue
-            elif urls[url_idx].endswith('price') or urls[url_idx].endswith('removed'):
+            elif urls[url_idx].endswith('price'):
                 continue
             try:
                 req = Request(urls[url_idx], headers={'User-Agent': 'Mozilla/5.0'})
@@ -56,7 +53,7 @@ def scrape_apt_ad_page():
                     urls[url_idx] += ' no price'
                     continue
             except:
-                urls[url_idx] += ' ad removed'
+                df = df.drop([url_idx])
                 continue
 
             div_title = page_soup.find_all('div', {'class': 't'})  # titles of apartment descriptive information: e.g.
@@ -97,5 +94,4 @@ def scrape_apt_ad_page():
 
 
 if __name__ == '__main__':
-
     scrape_apt_ad_page()
