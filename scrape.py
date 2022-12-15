@@ -38,13 +38,26 @@ def get_categories_paths():
     pg_soup = page_soup(url)
     section_cat = pg_soup.select('div.s')
     categories_dict = dict()
-    for cat in section_cat[2].select('a'):
-        categories_dict[cat.text + ' for sale'] = cat['href']
-    for cat in section_cat[3].select('a'):
-        categories_dict[cat.text + ' for rent'] = cat['href']
+    for cat in section_cat:
+        tmp = cat.next.lower().strip()
+        if tmp == 'for rent':
+            for elem in cat.select('a'):
+                categories_dict[elem.text + ' for rent'] = elem['href']
+        elif tmp == 'for sale':
+            for elem in cat.select('a'):
+                categories_dict[elem.text + ' for sale'] = elem['href']
+        elif tmp == 'new construction':
+            for elem in cat.select('a'):
+                categories_dict[elem.text + ' new construction'] = elem['href']
+
+    # for cat in section_cat[3].select('a'):
+    #     categories_dict[cat.text + ' for sale'] = cat['href']
+    # for cat in section_cat[2].select('a'):
+    #     categories_dict[cat.text + ' for rent'] = cat['href']
 
     return categories_dict
-
+cat = get_categories_paths()
+print('')
 
 def get_regions():
     """
