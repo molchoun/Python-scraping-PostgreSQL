@@ -57,7 +57,7 @@ def get_categories_paths():
 
     return categories_dict
 cat = get_categories_paths()
-print('')
+
 
 def get_regions():
     """
