@@ -56,7 +56,6 @@ def get_categories_paths():
     #     categories_dict[cat.text + ' for rent'] = cat['href']
 
     return categories_dict
-cat = get_categories_paths()
 
 
 def get_regions():
@@ -97,7 +96,7 @@ def get_ad_links(url: str, path: Path, key_cat: str, key_loc: str):
             url = URL_HOME + next_page_url
         else:
             break
-        time.sleep(random.randint(2, 5))
+        # time.sleep(random.randint(2, 5))
         print(f'Page {p} is done')
         p += 1
 
