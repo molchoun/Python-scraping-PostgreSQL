@@ -1,3 +1,4 @@
+import os
 import re
 import urllib
 from pathlib import Path
@@ -7,10 +8,12 @@ from bs4 import BeautifulSoup as soup
 import time
 import pandas as pd
 import random
-import db
+from db import DB
+import sys
 
 
 URL_HOME = 'https://www.list.am/en'
+db = DB()
 
 
 def page_soup(url: str):
@@ -34,6 +37,13 @@ def page_soup(url: str):
 def get_categories_paths():
     """Returns all categories' names and paths in a dictionary.
     e.g. {'Apartments for sale': '/category/60', 'Houses for rent: '/category/63', ...} """
+    conn, cur = db.conn, db.cur
+    if db.check_table('property_type') == True:
+        select_cat = cur.execute('''SELECT name, q_string
+                                    FROM property_type;''')
+        cat_paths = cur.fetchall()
+        if len(cat_paths) > 0:
+            return cat_paths
 
     url = 'https://www.list.am/en/category/54'  # arbitrary category url to fetch all categories paths
     pg_soup = page_soup(url)
@@ -50,13 +60,19 @@ def get_categories_paths():
         elif tmp == 'new construction':
             for elem in cat.select('a'):
                 categories_dict[elem.text + ' new construction'] = elem['href']
-
-    # for cat in section_cat[3].select('a'):
-    #     categories_dict[cat.text + ' for sale'] = cat['href']
-    # for cat in section_cat[2].select('a'):
-    #     categories_dict[cat.text + ' for rent'] = cat['href']
-
-    return categories_dict
+    create_table = ('''CREATE TABLE IF NOT EXISTS property_type
+                                              (id SERIAL PRIMARY KEY,
+                                              name VARCHAR(255),
+                                              q_string VARCHAR(16) UNIQUE)''')
+    cur.execute(create_table)
+    insert_to_table = '''INSERT INTO property_type (name, q_string)
+                         VALUES (%s, %s)
+                         ON CONFLICT (q_string) DO NOTHING;
+                       '''
+    for key, value in categories_dict.items():
+        cur.execute(insert_to_table, (key, value))
+    conn.commit()
+    return get_categories_paths
 
 
 def get_regions():
@@ -79,8 +95,7 @@ def get_regions():
 
 def get_ad_links(url: str, key_cat: str, key_loc: str):
     a_tags = []
-    p = 1
-    print(f'{key_cat} category for {key_loc} region')
+    page_num = 1
     while True:  # loop through each page of pagination
         pg_soup = page_soup(url)
         # append list with `a` tags containing path to ad, e.g /en/item/16954298
@@ -93,8 +108,9 @@ def get_ad_links(url: str, key_cat: str, key_loc: str):
         else:
             break
         # time.sleep(random.randint(2, 5))
-        print(f'Page {p} is done')
-        p += 1
+        page_num += 1
+        sys.stdout.write(f"\r{key_cat} category for {key_loc} region: page %i" % page_num)
+        sys.stdout.flush()
 
     try:
         pass
@@ -104,8 +120,8 @@ def get_ad_links(url: str, key_cat: str, key_loc: str):
     for a in a_tags:
         full_url = 'https://list.am' + a['href']
         conn, cur = db.connect()
-        cur.execute('''SELECT links 
-                       FROM tables 
+        cur.execute('''SELECT links
+                       FROM tables
                        WHERE table_name=%s)''', (mytable,))
         if full in urls_data.tolist():
             continue
@@ -117,13 +133,13 @@ def get_ad_links(url: str, key_cat: str, key_loc: str):
 
 
 if __name__ == '__main__':
-    conn, cur = db.connect()
-    cur.execute('''SELECT name, q_string
-                   FROM property_type;''')
-    category_paths = cur.fetchall()
-    cur.execute('''SELECT name, q_string
-                   FROM regions;''')
-    regions = cur.fetchall()
+    # conn, cur = db.connect()
+    # cur.execute('''SELECT name, q_string
+    #                FROM property_type;''')
+    category_paths = get_categories_paths()
+    # cur.execute('''SELECT name, q_string
+    #                FROM regions;''')
+    # regions = cur.fetchall()
     # For each category pages (Apartments, Houses, Lands, etc.) go over every region (Yerevan, Armavir, Ararat, etc.)
     for cat, cat_path in category_paths:
         for reg, reg_path in regions:
