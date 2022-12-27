@@ -28,6 +28,56 @@ class DB:
 
         return conn, cur
 
+    def create_table_categories(self):
+        create_table = ('''
+                        CREATE TABLE IF NOT EXISTS property_type
+                          (id SERIAL PRIMARY KEY,
+                          name VARCHAR(255),
+                          q_string VARCHAR(16) UNIQUE);
+                        ''')
+        self.cur.execute(create_table)
+        insert_into_table = '''
+                             INSERT INTO property_type (name, q_string)
+                             VALUES (%i, %i)
+                             ON CONFLICT (q_string) DO NOTHING;
+                            '''
+        categories_dict = scrape.get_categories()
+        for key, value in categories_dict.items():
+            self.cur.execute(insert_into_table, (key, value))
+        self.conn.commit()
+        self.conn.close()
+
+    def create_table_regions(self):
+        create_table = ('''
+                        CREATE TABLE IF NOT EXISTS property_type
+                          (id SERIAL PRIMARY KEY,
+                          name VARCHAR(255),
+                          q_string VARCHAR(16) UNIQUE);
+                        ''')
+        self.cur.execute(create_table)
+        insert_into_table = '''
+                          INSERT INTO regions (name, q_string)
+                          VALUES (%i, %i)
+                          ON CONFLICT (q_string) DO NOTHING;
+                          '''
+        regions_dict = scrape.get_regions()
+        for key, value in regions_dict.items():
+            self.cur.execute(insert_into_table, (key, value))
+        self.conn.commit()
+        self.conn.close()
+
+    def create_table_urls(self):
+        create_table = ('''
+                        CREATE TABLE IF NOT EXISTS urls
+                          (id SERIAL PRIMARY KEY,
+                          url VARCHAR(255),
+                          category_id REFERENCES property_type(id)),
+                          region_id REFERENCES regions(id),
+                          retrieved INTEGER DEFAULT 0);
+                        ''')
+        self.cur.execute(create_table)
+        self.conn.commit()
+        self.conn.close()
 
     def create_tables(self):
         """ Create the tables and define relationships"""
@@ -172,10 +222,7 @@ class DB:
                     ''',
 
         )
-        # create_table_category = ('''CREATE TABLE IF NOT EXISTS property_type
-    #                                       (id SERIAL PRIMARY KEY,
-    #                                       title VARCHAR(255),
-    #                                       q_string VARCHAR(16) UNIQUE)''',
+
     #                                  '''CREATE TABLE IF NOT EXISTS regions
     #                                       (id SERIAL PRIMARY KEY,
     #                                       name VARCHAR(255),
