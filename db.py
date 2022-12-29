@@ -10,7 +10,8 @@ class DB:
 
     def check_table(self, table_name):
         self.cur.execute("select exists(select * from information_schema.tables where table_name=%s)", (table_name,))
-        _ = self.cur.fetchone()
+        _ = self.cur.fetchone()[0]
+
         return _
 
     @staticmethod
@@ -38,14 +39,13 @@ class DB:
         self.cur.execute(create_table)
         insert_into_table = '''
                              INSERT INTO property_type (name, q_string)
-                             VALUES (%i, %i)
+                             VALUES (%s, %s)
                              ON CONFLICT (q_string) DO NOTHING;
                             '''
         categories_dict = scrape.get_categories()
         for key, value in categories_dict.items():
             self.cur.execute(insert_into_table, (key, value))
         self.conn.commit()
-        self.conn.close()
 
     def create_table_regions(self):
         create_table = ('''
@@ -57,27 +57,31 @@ class DB:
         self.cur.execute(create_table)
         insert_into_table = '''
                           INSERT INTO regions (name, q_string)
-                          VALUES (%i, %i)
+                          VALUES (%s, %s)
                           ON CONFLICT (q_string) DO NOTHING;
                           '''
         regions_dict = scrape.get_regions()
         for key, value in regions_dict.items():
             self.cur.execute(insert_into_table, (key, value))
         self.conn.commit()
-        self.conn.close()
 
     def create_table_urls(self):
         create_table = ('''
                         CREATE TABLE IF NOT EXISTS urls
                           (id SERIAL PRIMARY KEY,
-                          url VARCHAR(255),
-                          category_id REFERENCES property_type(id)),
-                          region_id REFERENCES regions(id),
-                          retrieved INTEGER DEFAULT 0);
+                          url VARCHAR(255) UNIQUE,
+                          category_id INT, 
+                          region_id INT,
+                          retrieved INTEGER DEFAULT 0,
+                          CONSTRAINT fk_category 
+                          FOREIGN KEY(category_id)
+                          REFERENCES property_type(id),
+                          CONSTRAINT fk_region
+                          FOREIGN KEY(region_id)
+                          REFERENCES regions(id));
                         ''')
         self.cur.execute(create_table)
         self.conn.commit()
-        self.conn.close()
 
     def create_tables(self):
         """ Create the tables and define relationships"""

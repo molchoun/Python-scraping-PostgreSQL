@@ -1,14 +1,9 @@
 import re
 import urllib
-from pathlib import Path
 from urllib.request import Request, urlopen
 from urllib.error import HTTPError
 from bs4 import BeautifulSoup as soup
-import pandas as pd
 import time
-import random
-import copy
-start_time = time.perf_counter()
 
 
 URL_HOME = 'https://www.list.am/en'
@@ -73,7 +68,7 @@ def get_regions():
     return loc_dict
 
 
-def get_ad_links(url: str, path: Path, key_cat: str, key_loc: str):
+def get_ad_links(url: str, key_cat: str, key_loc: str):
     a_tags = []
     p = 1
     print(f'{key_cat} category for {key_loc} region')
@@ -94,22 +89,3 @@ def get_ad_links(url: str, path: Path, key_cat: str, key_loc: str):
 
     print('Done')
     return a_tags
-
-
-if __name__ == '__main__':
-    category_paths = {'Apartments for rent': '/category/56', 'Houses for rent': '/category/63', 'Rooms for rent': '/category/212', 'Commercial Properties for rent': '/category/59', 'Event Venues for rent': '/category/267', 'Garages and Parking for rent': '/category/175', 'Trailers and Booths for rent': '/category/58', 'Apartments for sale': '/category/60', 'Houses for sale': '/category/62', 'Land for sale': '/category/55', 'Commercial Properties for sale': '/category/199', 'Garages and Parking for sale': '/category/173', 'Trailers and Booths for sale': '/category/61', 'Apartments new construction': '/category/268', 'Houses new construction': '/category/269'}
-    regions = {'Yerevan': '?n=1', 'Armavir': '?n=23', 'Ararat': '?n=19', 'Kotayk': '?n=40', 'Shirak': '?n=49', 'Lorri': '?n=44', 'Gegharkunik': '?n=35', 'Syunik': '?n=52', 'Aragatsotn': '?n=14', 'Tavush': '?n=57', 'Vayots Dzor': '?n=61', 'Artsakh': '?n=27', 'International': '?n=116'}
-    # For each category pages (Apartments, Houses, Lands, etc.) go over every region (Yerevan, Armavir, Ararat, etc.)
-    for key_cat in category_paths:
-        for key_loc in regions:
-            url = URL_HOME + category_paths[key_cat] + regions[key_loc]
-            path_to_file = Path(f'data/{key_cat}/{key_loc}/{key_cat}.csv')
-            path_to_folder = Path(f'data/{key_cat}/{key_loc}')
-            if not path_to_folder.exists():
-                path_to_folder.mkdir(parents=True, exist_ok=True)
-            ad_links = get_ad_links(url, path_to_file, key_cat, key_loc)
-            dict_apt = {
-                key_cat: ad_links
-            }
-            df_links_apt = pd.DataFrame(dict_apt)
-            df_links_apt.to_csv(path_to_file, index=False)
