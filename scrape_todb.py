@@ -22,8 +22,7 @@ def select_categories():
 def select_regions():
     if db.check_table('regions'):
         cur.execute('''SELECT name, q_string
-                       FROM regions
-                       WHERE name = 'Artsakh';''')
+                       FROM regions;''')
         reg_paths = cur.fetchall()
         if len(reg_paths) > 0:
             return reg_paths
@@ -39,7 +38,7 @@ def load_urls_todb(urls, cat, reg):
         cur.execute('SELECT id FROM regions WHERE name = %s', (reg, ))
         reg_id = cur.fetchone()[0]
         insert_into_table = '''
-                            INSERT INTO urls(url, category_id, region_id)
+                            INSERT INTO urls(url, cat_id, reg_id)
                             VALUES (%s, %s, %s)
                             ON CONFLICT (url) DO NOTHING
                             '''
@@ -49,8 +48,8 @@ def load_urls_todb(urls, cat, reg):
         conn.commit()
     else:
         db.create_table_urls()
+        return load_urls_todb(urls, cat, reg)
 
-    return load_urls_todb(urls, cat, reg)
 
 
 def main():
