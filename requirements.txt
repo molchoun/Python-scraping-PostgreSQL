@@ -1,3 +1,5 @@
 beautifulsoup4>=4.10.0
 pandas>=1.5.1
 psycopg2-binary>=2.9.5
+numpy>=1.21.5
+SQLAlchemy>=1.4.46
