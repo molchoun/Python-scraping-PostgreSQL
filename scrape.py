@@ -39,13 +39,13 @@ def get_categories():
         tmp = cat.next.lower().strip()
         if tmp == 'for rent':
             for elem in cat.select('a'):
-                categories_dict[elem.text + ' for rent'] = elem['href']
+                categories_dict[elem.text.strip().replace(' ', '_').lower() + '_for_rent'] = elem['href']
         elif tmp == 'for sale':
             for elem in cat.select('a'):
-                categories_dict[elem.text + ' for sale'] = elem['href']
+                categories_dict[elem.text.strip().replace(' ', '_').lower() + '_for_sale'] = elem['href']
         elif tmp == 'new construction':
             for elem in cat.select('a'):
-                categories_dict[elem.text + ' new construction'] = elem['href']
+                categories_dict[elem.text.strip().replace(' ', '_').lower() + '_new_construction'] = elem['href']
 
     return categories_dict
 
