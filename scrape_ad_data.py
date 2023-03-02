@@ -5,7 +5,12 @@ from datetime import datetime
 import os
 import time
 import random
+import psycopg2
 from db import DB
+import numpy as np
+import re
+import psycopg2
+from psycopg2 import sql
 
 def clean_currency(x):
     """ If the value is a string, then remove currency symbol and delimiters
@@ -15,31 +20,81 @@ def clean_currency(x):
     if isinstance(x, str):
         return x.replace('$', '').replace('֏', '').replace('₽', '').replace('€', '').replace(',', '')
 
+# def clean_data(key, tmp=''):
+#
+#     clean_dict = {
+#         'new_construction': tmp.replace('No', '0').replace('Yes', '1'),
+#         'elevator': tmp.replace('Not available', '0').replace('Available', '1'),
+#         'floors_in_the_building': tmp.replace('+', ''),
+#         'floor_area': re.search(r'\d+', tmp),
+#         'land_area': re.search(r'\d+', tmp),
+#         'room_area': re.search(r'\d+', tmp),
+#         'number_of_rooms': tmp.replace('+', ''),
+#         'number_of_bathrooms': tmp.replace('+', ''),
+#         'ceiling_height': re.search(r'(\d+(?:\.\d+)?)', tmp).group(0),
+#         'floor': tmp.replace('+', ''),
+#         'children_are_welcome': tmp.replace('No', '10').replace('Yes', '11').replace('Negotiable', '12'),
+#         'pets_allowed': tmp.replace('No', '10').replace('Yes', '11').replace('Negotiable', '12'),
+#         'utility_payments': tmp.replace('Not included', '10').replace('Included', '11').replace('By Agreement', '12')
+#     }
+#     try:
+#         return clean_dict[key]
+#     except:
+#         return False
 
-def scrape_apt_ad_page():
+
+def del_cols(data_dict):
+    to_del = ['prepayment', 'number_of_guests', 'lease_type', 'minimum_rental_period',
+              'noise_after_hours', 'mortgage_is_possible', 'handover_date', 'window_views']
+    for col in to_del:
+        if col in data_dict:
+            del data_dict[col]
+    return data_dict
+
+
+def scrape_apt_ad_page(data_dict=None):
     db = DB()
     conn, cur = db.conn, db.cur
 
     while True:
-        cur.execute('SELECT url, reg_id FROM urls WHERE retrieved = 0;')
-        url, reg_id = cur.fetchone()
-
+        cur.execute('''SELECT urls.url, urls.reg_id, property_type.name, urls.id
+                       FROM urls 
+                       INNER JOIN property_type 
+                       ON property_type.id = urls.cat_id 
+                       WHERE urls.retrieved = 0;''')
+        url, reg_id, table_name, url_id = cur.fetch_all()
         try:
             req = Request(url, headers={'User-Agent': 'Mozilla/5.0'})
             webpage = urlopen(req).read().decode('utf-8')
             page_soup = soup(webpage, "html.parser")
             if page_soup.find('span', class_='price') is None:  # delete url and skip if ad has no price provided
-                cur.execute(f'UPDATE urls SET retrieved = -1 WHERE url = {url};')
+                cur.execute(f'UPDATE urls SET retrieved = -1 WHERE id = %s;', (url_id, ))
                 conn.commit()
                 continue
         except:
-            cur.execute(f'UPDATE urls SET retrieved = -2 WHERE url = {url};')
+            cur.execute(f'UPDATE urls SET retrieved = -2 WHERE id = %s;', (url_id, ))
             conn.commit()
             continue
 
         div_title = page_soup.find_all('div', {'class': 't'})  # titles of apartment descriptive information: e.g.
         # construction type, floor area, number of rooms etc.
         div_value = page_soup.find_all('div', class_='i')  # values of titles
+        for i in range(len(div_value)):
+            div_value[i] = div_value[i].text.strip().replace(' ', '_').lower()
+            try:
+                div_value[i] = int(div_value[i].replace('not_included', '0').replace('by_agreement', '2').replace('not_available', '0')
+                                   .replace('yes', '1').replace('no', '0').replace('available', '1')
+                                   .replace('+', '').replace('negotiable', '2').replace('included', '1'))
+            except:
+                if 'sq.m.' in div_value[i]:
+                    div_value[i] = int(re.search(r'\d*[?:\.\d*]', div_value[i]).group())
+                elif 'from' in div_value[i]:
+                    try:
+                        div_value[i] = float(re.search(r'(\d+(?:\.\d+)?)', div_value[i]).group())
+                    except:
+                        continue
+                continue
+
         if page_soup.find('div', class_="loc") is None:
             address = ''
         elif page_soup.find('meta', {'itemprop': 'priceCurrency'}) is None:
@@ -50,8 +105,17 @@ def scrape_apt_ad_page():
         price = page_soup.find('span', class_='price').text
         datetime_now = datetime.now().strftime("%Y-%m-%d")
 
-        data_dict = {div_title[i].text.strip().replace(' ', '_').lower(): div_value[i].text
-                     for i in range(len(div_title)) if div_title[i].text != 'Places Nearby'}
+        data_dict = {div_title[i].text.strip().replace(' ', '_').lower(): div_value[i]
+                     for i in range(len(div_title)) if div_title[i].text != 'places_nearby'}
+
+        columns = (("id", "SERIAL PRIMARY KEY"),
+                   ("links", "INTEGER REFERENCES urls(id) UNIQUE"),
+                   ("reg_id", "INTEGER REFERENCES regions(id)"),
+                   ("price", "BIGINT"),
+                   ("datetime", "DATE"))
+
+        data_dict = del_cols(data_dict)
+
         data_dict['address'] = address
         data_dict['currency'] = currency
         data_dict['datetime'] = datetime_now
@@ -62,9 +126,49 @@ def scrape_apt_ad_page():
             data_dict['duration'] = duration
         data_dict['price'] = int(price)
 
-        del_cols = cols = ['prepayment', 'number_of_guests', 'lease_type', 'minimum_rental_period',
-                           'noise_after_hours', 'mortgage_is_possible', 'handover_date', 'window_views']
-        clean_cols = ['new_construction']
+        if not db.check_table(table_name):
+            for col in data_dict.keys():
+                if isinstance(col, int):
+                    col_type = "INTEGER"
+                elif col == 'datetime':
+                    col_type = "DATE"
+                elif col == 'price':
+                    col_type = "BIGINT"
+                else:
+                    col_type = "TEXT"
+                _t = (col, col_type)
+                columns += (_t,)
+            db.create_table(table_name, columns)
+
+        cur.execute(f"SELECT MAX(id) FROM {table_name};")
+        _id = cur.fetchone()
+        if _id is not None:
+            table_id = _id[0] + 1
+        else:
+            table_id = 0
+
+        cur.execute(sql.SQL("INSERT INTO {table} (id, links, reg_id) VALUES (%s, %s, %s) "
+                            "ON CONFLICT (links) DO NOTHING;")
+                    .format(table=sql.Identifier(table_name)),
+                    (table_id, url_id, reg_id))
+        conn.commit()
+        for key in data_dict:
+            cur.execute('''SELECT EXISTS (SELECT column_name
+                           FROM information_schema.columns
+                           WHERE table_name = %s and column_name = %s);''', (table_name, key))
+            if not cur.fetchone()[0]:
+                cur.execute(sql.SQL("ALTER TABLE {table} ADD COLUMN {column} text;").
+                            format(table=sql.Identifier(table_name), column=sql.Identifier(key)))
+                conn.commit()
+
+            table_id = cur.execute(sql.SQL(f"SELECT id FROM {table_name} WHERE url = %s")
+                                   .format(table=sql.Identifier(table_name)),
+                                   (url_id, ))
+            cur.execute(sql.SQL("UPDATE {table} SET {field} = (%s) WHERE id = %s;")
+                        .format(table=sql.Identifier(table_name), field=sql.Identifier(key)),
+                        (data_dict[key], table_id))
+        cur.execute("UPDATE urls SET retrieved = 1 WHERE id = %s", (url_id, ))
+        conn.commit()
 
 
 if __name__ == '__main__':

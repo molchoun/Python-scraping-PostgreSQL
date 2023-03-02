@@ -1,7 +1,7 @@
 import psycopg2
 from config import config
 import scrape
-
+from psycopg2 import sql
 
 class DB:
 
@@ -13,6 +13,20 @@ class DB:
         _ = self.cur.fetchone()[0]
 
         return _
+
+    def create_table(self, name, columns):
+        # name = "table_name"
+        # columns = (("col1", "TEXT"), ("col2", "INTEGER"), ...)
+        fields = []
+        for col in columns:
+            fields.append(sql.SQL("{} {}").format(sql.Identifier(col[0]), sql.SQL(col[1])))
+
+        query = sql.SQL("CREATE TABLE {tbl_name} ( {fields} );").format(
+            tbl_name=sql.Identifier(name),
+            fields=sql.SQL(', ').join(fields)
+        )
+        self.cur.execute(query)
+        self.conn.commit()
 
     @staticmethod
     def connect(conn=None):
