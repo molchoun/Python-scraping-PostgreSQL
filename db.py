@@ -9,7 +9,10 @@ class DB:
         self.conn, self.cur = self.connect()
 
     def check_table(self, table_name):
-        self.cur.execute("select exists(select * from information_schema.tables where table_name=%s)", (table_name,))
+        self.cur.execute("select exists"
+                         "(select table_name "
+                         "from information_schema.tables "
+                         "where table_name=%s)", (table_name,))
         _ = self.cur.fetchone()[0]
 
         return _
@@ -240,29 +243,3 @@ class DB:
                     ''',
 
         )
-
-    #                                  '''CREATE TABLE IF NOT EXISTS regions
-    #                                       (id SERIAL PRIMARY KEY,
-    #                                       name VARCHAR(255),
-    #                                       q_string VARCHAR(16) UNIQUE)''')
-    #         for command in create_table_category:
-    #             cur.execute(command)
-    #         category_values = scrape.get_categories_paths()
-    #         region_values = scrape.get_regions()
-    #         insert_to_table1 = '''INSERT INTO property_type (title, q_string)
-    #                               VALUES (%s, %s)
-    #                               ON CONFLICT (q_string) DO NOTHING;'''
-    #         insert_to_table2 = '''INSERT INTO regions (name, q_string)
-    #                               VALUES (%s, %s)
-    #                               ON CONFLICT (q_string) DO NOTHING;'''
-    #         for key in category_values:
-    #             cur.execute(insert_to_table1, (key, category_values[key]))
-    #         for key in region_values:
-    #             cur.execute(insert_to_table2, (key, region_values[key]))
-    #         conn.commit()
-    #         # close the communication with the PostgreSQL
-    #         cur.close()
-
-
-if __name__ == '__main__':
-    pass
