@@ -51,7 +51,6 @@ def load_urls_todb(urls, cat, reg):
         return load_urls_todb(urls, cat, reg)
 
 
-
 def main():
     categories = select_categories()
     regions = select_regions()
