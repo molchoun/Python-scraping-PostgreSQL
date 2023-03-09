@@ -3,6 +3,10 @@ from urllib.request import Request, urlopen
 import pandas as pd
 from bs4 import BeautifulSoup
 from datetime import datetime
+import clean_data
+from sqlalchemy import create_engine
+from config import config
+import io
 import os
 import time
 import random
@@ -12,6 +16,12 @@ import numpy as np
 import re
 import psycopg2
 from psycopg2 import sql
+
+
+params = config()
+conn_string = f"postgresql://{params['user']}:{params['password']}@{params['host']}/{params['database']}"
+engine = create_engine('postgresql+psycopg2://postgres:SecurePas$1@localhost/real_estate')
+
 
 def clean_currency(x):
     """ If the value is a string, then remove currency symbol and delimiters
@@ -74,26 +84,28 @@ def create_table_if_not_exists(db, table_name, field_names):
     db.create_table(table_name, fields)
 
 
-def fetch_urls():
-    cur.execute('''SELECT urls.url, urls.reg_id, property_type.name, urls.id
-                               FROM urls 
-                               INNER JOIN property_type 
-                               ON property_type.id = urls.cat_id 
-                               WHERE urls.retrieved = 0;''')
+def fetch_urls(cursor):
+    cursor.execute('''SELECT urls.url, urls.reg_id, p.name, urls.id
+                   FROM urls
+                   INNER JOIN property_type p
+                   ON p.id = urls.cat_id
+                   WHERE urls.retrieved = 0 and p.name IN ('houses_new_construction', 'apartments_new_construction');''')
 
 
 def no_price(web_element, url_id):
     if web_element is None:  # delete url and skip if ad has no price provided
-        cur.execute(f'UPDATE urls SET retrieved = -1 WHERE id = %s;', (url_id,))
-        conn.commit()
-        fetch_urls()
+        with DB().cur as cur_:
+            cur_.execute(f'UPDATE urls SET retrieved = -1 WHERE id = %s;', (url_id,))
+            conn.commit()
+
         return True
 
 
 def http_error(url_id):
-    cur.execute(f'UPDATE urls SET retrieved = -2 WHERE id = %s;', (url_id,))
-    conn.commit()
-    fetch_urls()
+    with DB().cur as cur_:
+        cur_.execute(f'UPDATE urls SET retrieved = -2 WHERE id = %s;', (url_id,))
+        conn.commit()
+
 
 
 def soup(url, url_id):
@@ -103,13 +115,64 @@ def soup(url, url_id):
     return page_soup
 
 
-def scrape_apt_ad_page(data_dict=None):
-    cur.execute('''SELECT COUNT(id) FROM urls WHERE retrieved = 0;''')
+def url_count():
+    # cur.execute('''SELECT COUNT(id) FROM urls WHERE retrieved = 0;''')
+    cur.execute('''SELECT COUNT(id) FROM urls WHERE retrieved = 0 and cat_id IN (14, 15);''')
     len_urls = cur.fetchone()[0]
-    fetch_urls()
+    return len_urls
+
+
+def url_set_retrieved(url_id):
+    with DB().cur as cur_:
+        cur_.execute(f'UPDATE urls SET retrieved = 1 WHERE id = %s;', (url_id,))
+        conn.commit()
+
+
+def scrape_apt_ad_page(data_dict=None):
+    len_urls = url_count()
+    fetch_urls(cur)
+
+    # tbl_dict = dict() # table comparison dict method
+    # old_len = len(tbl_dict) + 1 # table comparison dict method
+    # i = 1 # table comparison dict method
+
+    df = pd.DataFrame()
     while len_urls:
-        url, reg_id, table_name, url_id = cur.fetchone()
         len_urls -= 1
+        url, reg_id, table_name, url_id = cur.fetchone()
+        with DB().cur as cur_:
+            cur_.execute('''SELECT urls.url, urls.reg_id, p.name, urls.id
+                               FROM urls 
+                               INNER JOIN property_type p
+                               ON p.id = urls.cat_id 
+                               WHERE urls.retrieved = 0 and p.name IN ('houses_new_construction', 'apartments_new_construction')
+                               OFFSET 1;''')
+            new_table_name = cur_.fetchone()[2]
+
+        # tbl_dict[table_name] = i # table comparison dict method
+        # new_len = len(tbl_dict) # table comparison dict method
+        # if old_len != new_len: # table comparison dict method
+        #     tbl_name = list(tbl_dict.keys())[list(tbl_dict.values()).index(i)] # table comparison dict method
+
+        if table_name != new_table_name:
+            clean_data.drop_cols(df)
+            df['price'] = df['price'].apply(clean_data.clean_currency)
+            if df['price'].str.contains('daily').any():
+                df = clean_data.split_price_col(df)
+            clean_data.clean_df(df)
+            if not db.check_table(table_name):
+                df.head(0).to_sql(table_name, engine, if_exists='replace', index=False)
+            output = io.StringIO()
+            df.to_csv(output, sep='\t', header=False, index=False)
+            output.seek(0)
+            contents = output.getvalue()
+            cur.copy_from(output, table_name, null="")
+            conn.commit()
+            # create_table_if_not_exists(db, table_name, data_dict.keys())
+
+            df = pd.DataFrame()
+            # i += 1 # table comparison dict method
+            # old_len = new_len # table comparison dict method
 
         try:
             page_soup = soup(url, url_id)
@@ -123,49 +186,56 @@ def scrape_apt_ad_page(data_dict=None):
         # titles of apartment descriptive information: e.g. construction type, floor area, number of rooms etc.
         div_title = page_soup.find_all('div', {'class': 't'})
         div_value = page_soup.find_all('div', class_='i')  # values of titles
-        for i in range(len(div_value)):
-            div_value[i] = div_value[i].text.strip().replace(' ', '_').lower()
-            try:
-                div_value[i] = int(div_value[i].replace('not_included', '0').replace('by_agreement', '2').replace('not_available', '0')
-                                   .replace('yes', '1').replace('no', '0').replace('available', '1')
-                                   .replace('+', '').replace('negotiable', '2').replace('included', '1'))
-            except ValueError:
-                if 'sq.m.' in div_value[i]:
-                    div_value[i] = int(re.search(r'\d*[?:\.\d*]', div_value[i]).group())
-                elif 'from' in div_value[i]:
-                    div_value[i] = float(re.search(r'(\d+(?:\.\d+)?)', div_value[i]).group())
-                continue
-        #
-        # if page_soup.find('div', class_="loc") is None:
-        #     address = ''
-        # elif page_soup.find('meta', {'itemprop': 'priceCurrency'}) is None:
-        #     currency = 'unknown'
-        # else:
-        #     currency = page_soup.find('meta', {'itemprop': 'priceCurrency'})['content']
-        #     address = page_soup.find('div', class_="loc").text
-        # price = page_soup.find('span', class_='price').text
-        # datetime_now = datetime.now().strftime("%Y-%m-%d")
-        #
-        # data_dict = {div_title[i].text.strip().replace(' ', '_').lower(): div_value[i]
-        #              for i in range(len(div_title)) if div_title[i].text != 'places_nearby'}
-        #
+        data_dict = {div_title[i].text.strip().replace(' ', '_').lower(): div_value[i].text
+                     for i in range(len(div_title)) if div_title[i].text != 'Places Nearby'}
 
-        #
-        # data_dict = del_cols(data_dict)
-        #
-        # data_dict['address'] = address
-        # data_dict['currency'] = currency
-        # data_dict['datetime'] = datetime_now
+        if page_soup.find('div', class_="loc") is None:
+            address = ''
+        elif page_soup.find('meta', {'itemprop': 'priceCurrency'}) is None:
+            currency = 'unknown'
+        else:
+            currency = page_soup.find('meta', {'itemprop': 'priceCurrency'})['content']
+            address = page_soup.find('div', class_="loc").text
+        price = page_soup.find('span', class_='price').text
+        datetime_now = datetime.now().strftime("%Y-%m-%d")
+
+        data_dict['address'] = address
+        data_dict['currency'] = currency
+        data_dict['datetime'] = datetime_now
+        data_dict['price'] = price
+        data_dict['url_id'] = url_id
+        data_dict['reg_id'] = reg_id
+
+
+        df = pd.concat([df, pd.DataFrame.from_records([data_dict])])
+        url_set_retrieved(url_id)
+        conn.commit()
+
+
+
+        # CLEAN WITH pandas
+        # --------------------------------------------------------------------------------------------------
+        # for i in range(len(div_value)):
+        #     div_value[i] = div_value[i].text.strip().replace(' ', '_').lower()
+        #     try:
+        #         div_value[i] = int(div_value[i].replace('not_included', '0').replace('by_agreement', '2').replace('not_available', '0')
+        #                            .replace('yes', '1').replace('no', '0').replace('available', '1')
+        #                            .replace('+', '').replace('negotiable', '2').replace('included', '1'))
+        #     except ValueError:
+        #         if 'sq.m.' in div_value[i]:
+        #             div_value[i] = int(re.search(r'\d*[?:\.\d*]', div_value[i]).group())
+        #         elif 'from' in div_value[i]:
+        #             div_value[i] = float(re.search(r'(\d+(?:\.\d+)?)', div_value[i]).group())
+        #         continue
         # try:
         #     price = int(clean_currency(price))
         # except:
         #     price, duration = clean_currency(price).split()
         #     data_dict['duration'] = duration
         # data_dict['price'] = int(price)
+        # data_dict = del_cols(data_dict)
+        # ---------------------------------------------------------------------------------------------------
         #
-
-        # if not db.check_table(table_name):
-        #     create_table_if_not_exists(db, table_name, data_dict.keys())
         #
         # cur.execute(f"SELECT MAX(id) FROM {table_name};")
         # _id = cur.fetchone()
@@ -196,7 +266,7 @@ def scrape_apt_ad_page(data_dict=None):
         #                 (data_dict[key], table_id))
         # cur.execute("UPDATE urls SET retrieved = 1 WHERE id = %s", (url_id, ))
         # conn.commit()
-
+    print('')
 if __name__ == '__main__':
     db = DB()
     conn, cur = db.conn, db.cur
