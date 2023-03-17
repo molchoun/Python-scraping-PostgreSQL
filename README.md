@@ -1,7 +1,5 @@
 # Web Scraping with Beautiful Soup and PostgreSQL 
 
-## Real Estate data scraping from 
-
 ## Description
 
 This Python project demonstrates how to extract data using the Beautiful Soup library, clean it using Pandas, and load it into a PostgreSQL database.
