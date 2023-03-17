@@ -8,7 +8,7 @@ conn, cur = db.conn, db.cur
 
 
 def select_categories():
-    if db.check_table('property_type'):
+    if db.table_exists('property_type'):
         cur.execute('''SELECT name, q_string
                        FROM property_type;''')
         cat_paths = cur.fetchall()
@@ -20,7 +20,7 @@ def select_categories():
 
 
 def select_regions():
-    if db.check_table('regions'):
+    if db.table_exists('regions'):
         cur.execute('''SELECT name, q_string
                        FROM regions;''')
         reg_paths = cur.fetchall()
@@ -32,7 +32,7 @@ def select_regions():
 
 
 def load_urls_todb(urls, cat, reg):
-    if db.check_table('urls'):
+    if db.table_exists('urls'):
         cur.execute('SELECT id FROM property_type WHERE name = %s', (cat, ))
         cat_id = cur.fetchone()[0]
         cur.execute('SELECT id FROM regions WHERE name = %s', (reg, ))

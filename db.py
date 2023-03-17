@@ -7,8 +7,9 @@ class DB:
 
     def __init__(self):
         self.conn, self.cur = self.connect()
+        self.conn.autocommit = True
 
-    def check_table(self, table_name):
+    def table_exists(self, table_name):
         self.cur.execute("select exists"
                          "(select table_name "
                          "from information_schema.tables "

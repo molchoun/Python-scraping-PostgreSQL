@@ -20,7 +20,8 @@ from psycopg2 import sql
 
 params = config()
 conn_string = f"postgresql://{params['user']}:{params['password']}@{params['host']}/{params['database']}"
-engine = create_engine('postgresql+psycopg2://postgres:SecurePas$1@localhost/real_estate')
+# engine = create_engine('postgresql+psycopg2://postgres:SecurePas$1@localhost/real_estate')
+engine = create_engine('postgresql+psycopg2://postgres:SecurePas$1@localhost/testdb')
 
 
 def clean_currency(x):
@@ -125,16 +126,12 @@ def url_count():
 def url_set_retrieved(url_id):
     with DB().cur as cur_:
         cur_.execute(f'UPDATE urls SET retrieved = 1 WHERE id = %s;', (url_id,))
-        conn.commit()
+
 
 
 def scrape_apt_ad_page(data_dict=None):
     len_urls = url_count()
     fetch_urls(cur)
-
-    # tbl_dict = dict() # table comparison dict method
-    # old_len = len(tbl_dict) + 1 # table comparison dict method
-    # i = 1 # table comparison dict method
 
     df = pd.DataFrame()
     while len_urls:
@@ -147,32 +144,10 @@ def scrape_apt_ad_page(data_dict=None):
                                ON p.id = urls.cat_id 
                                WHERE urls.retrieved = 0 and p.name IN ('houses_new_construction', 'apartments_new_construction')
                                OFFSET 1;''')
-            new_table_name = cur_.fetchone()[2]
-
-        # tbl_dict[table_name] = i # table comparison dict method
-        # new_len = len(tbl_dict) # table comparison dict method
-        # if old_len != new_len: # table comparison dict method
-        #     tbl_name = list(tbl_dict.keys())[list(tbl_dict.values()).index(i)] # table comparison dict method
-
-        if table_name != new_table_name:
-            clean_data.drop_cols(df)
-            df['price'] = df['price'].apply(clean_data.clean_currency)
-            if df['price'].str.contains('daily').any():
-                df = clean_data.split_price_col(df)
-            clean_data.clean_df(df)
-            if not db.check_table(table_name):
-                df.head(0).to_sql(table_name, engine, if_exists='replace', index=False)
-            output = io.StringIO()
-            df.to_csv(output, sep='\t', header=False, index=False)
-            output.seek(0)
-            contents = output.getvalue()
-            cur.copy_from(output, table_name, null="")
-            conn.commit()
-            # create_table_if_not_exists(db, table_name, data_dict.keys())
-
-            df = pd.DataFrame()
-            # i += 1 # table comparison dict method
-            # old_len = new_len # table comparison dict method
+            try:
+                new_table_name = cur_.fetchone()[2]
+            except TypeError:
+                new_table_name = table_name
 
         try:
             page_soup = soup(url, url_id)
@@ -209,7 +184,34 @@ def scrape_apt_ad_page(data_dict=None):
 
         df = pd.concat([df, pd.DataFrame.from_records([data_dict])])
         url_set_retrieved(url_id)
-        conn.commit()
+        
+        if table_name != new_table_name:
+            df = clean_data.drop_cols(df)
+            df['price'] = df['price'].apply(clean_data.clean_currency)
+            if df['price'].str.contains('daily').any():
+                df = clean_data.split_price_col(df)
+            clean_data.clean_df(df)
+            if not db.table_exists(table_name):
+                df.head(0).to_sql(table_name, engine, if_exists='replace', index=False)
+            cur.execute('''SELECT column_name 
+                            FROM INFORMATION_SCHEMA.COLUMNS 
+                            WHERE table_name = %s;''', (table_name, ))
+            # columns = [c[0] for c in cur.fetchall()[1:]]
+            columns = df.columns
+            columns_sql = ', '.join('"{}"'.format(c) for c in columns)
+            # copy_sql = "COPY {} ({}) FROM STDIN WITH CSV HEADER DELIMITER as ',';".format(table_name, columns_sql)
+            copy_sql = "COPY {} ({}) FROM STDIN WITH CSV;".format(table_name, columns_sql)
+            output = io.StringIO()
+            df.to_csv(output, sep='\t', header=False, index=False)
+            output.seek(0)
+            contents = output.getvalue()
+            df.to_sql(table_name, con=engine, if_exists='append', index=False)
+            # cur.copy_expert(sql=copy_sql, file=output)
+            # cur.copy_from(output, table_name, columns=columns, null="")
+            conn.commit()
+            # create_table_if_not_exists(db, table_name, data_dict.keys())
+
+            df = pd.DataFrame()
 
 
 
